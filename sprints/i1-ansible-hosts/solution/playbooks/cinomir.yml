@@ -1,0 +1,7 @@
+# Розгортання cinomir на Pi. Потрібен vault: make cinomir
+#   інша версія:  make cinomir EXTRA="-e cinomir_version=sha-1a2b3c4"
+- name: Розгорнути cinomir
+  hosts: home
+  become: true
+  roles:
+    - role: cinomir

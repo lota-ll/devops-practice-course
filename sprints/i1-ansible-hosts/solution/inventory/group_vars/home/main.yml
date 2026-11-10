@@ -1,0 +1,6 @@
+# Pi: SD-карта/NVMe — обмежуємо логи контейнерів
+docker_log_max_size: 10m
+docker_log_max_file: 3
+
+# cinomir (задача 6): ghcr.io/<твій-github-логін-малими-літерами>/cinomir
+cinomir_image: ghcr.io/CHANGE-ME/cinomir

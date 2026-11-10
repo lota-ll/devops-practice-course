@@ -1,0 +1,25 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Prometheus node_exporter {{ node_exporter_version }}
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=node_exporter
+Group=node_exporter
+ExecStart=/usr/local/bin/node_exporter --web.listen-address={{ node_exporter_listen }}{% for c in node_exporter_collectors_extra %} {{ c }}{% endfor %}
+
+Restart=on-failure
+# Hardening: процес лише читає /proc і /sys
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+LockPersonality=true
+MemoryDenyWriteExecute=true
+
+[Install]
+WantedBy=multi-user.target

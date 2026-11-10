@@ -1,0 +1,25 @@
+common_packages:
+  - ca-certificates
+  - curl
+  - htop
+  - jq
+  - nftables
+  - unattended-upgrades
+  - vim
+
+common_timezone: Etc/UTC
+
+# Ключ, який має бути в authorized_keys ДО вимкнення паролів
+common_admin_ssh_pubkey: ""
+
+common_ssh_password_authentication: false
+common_ssh_permit_root_login: "no"
+common_ssh_max_auth_tries: 3
+
+common_unattended_upgrades_reboot: false
+common_unattended_upgrades_reboot_time: "04:30"
+
+# [{port, proto?, from?: [cidr], comment}] — from порожній = звідусіль
+common_firewall_tcp_rules:
+  - { port: 22, comment: ssh }
+common_firewall_enabled: true

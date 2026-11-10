@@ -1,0 +1,22 @@
+docker_packages:
+  - docker-ce
+  - docker-ce-cli
+  - containerd.io
+  - docker-buildx-plugin
+  - docker-compose-plugin
+
+# Пакети з репозиторіїв дистрибутива, що конфліктують з docker-ce
+docker_conflicting_packages:
+  - docker.io
+  - docker-compose
+  - docker-doc
+  - podman-docker
+  - containerd
+  - runc
+
+# ⚠️ Група docker = фактично root на хості. За замовчуванням нікого не додаємо.
+docker_users: []
+
+docker_log_driver: json-file
+docker_log_max_size: 50m
+docker_log_max_file: 3

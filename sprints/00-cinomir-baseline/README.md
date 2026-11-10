@@ -178,12 +178,12 @@ Workflow на `pull_request` і `push` у `main`:
 1. `lint` — ruff check + format check
 2. `test` — pytest, JUnit-звіт як артефакт
 3. `migrations` — service-контейнер PostgreSQL: `upgrade → check → downgrade → upgrade`
-4. `build` (після 1–3) — buildx з кешем GHA, smoke-тест образу (імпорт модулів, `id -u` = 10001), **Trivy** (CRITICAL/HIGH з виправленням = падіння), push `ghcr.io/<you>/cinomir:sha-xxxxxxx` лише з `main`
+4. `build` (після 1–3) — buildx з кешем GHA, smoke-тест образу (імпорт модулів, `id -u` = 10001), **Trivy** (CRITICAL/HIGH з виправленням = падіння); лише з `main` — push `ghcr.io/<you>/cinomir:sha-xxxxxxx` для **amd64 і arm64** (QEMU, один тег = manifest list): наступна зупинка cinomir — Raspberry Pi 5
 5. `promote-staging` — GitHub Environment `staging` з **required reviewer**; retag `sha-…` → `staging` без перезбирання
 
 `permissions:` мінімальні на рівні workflow, розширення — лише в job, де потрібно.
 
-✅ **Перевірка:** PR з порушенням ruff — червоний; merge у `main` → образ у GHCR → job `promote-staging` чекає approve → після approve з'являється тег `staging` з тим самим digest.
+✅ **Перевірка:** PR з порушенням ruff — червоний; merge у `main` → образ у GHCR → `docker buildx imagetools inspect ghcr.io/<you>/cinomir:sha-xxxxxxx` показує `linux/amd64` і `linux/arm64` → job `promote-staging` чекає approve → після approve з'являється тег `staging` з тим самим digest.
 
 > 🔑 [hints.md#задача-7](hints.md#задача-7) · Еталон: [ci.yml](solution/.github/workflows/ci.yml)
 
@@ -228,7 +228,7 @@ Workflow на `pull_request` і `push` у `main`:
 - [ ] бот відповідає лише на твій Telegram id; кнопки сторінок і «⚖️ вигідніше за вагою» працюють
 - [ ] відсутні товари приховані; мережа, що впала, показана попередженням
 - [ ] образ — non-root, з healthcheck; Trivy без CRITICAL/HIGH з доступним виправленням
-- [ ] CI: lint → test → migrations → build → push → promote з approve
+- [ ] CI: lint → test → migrations → build → push (amd64 + arm64) → promote з approve
 - [ ] у `docs/adr/0001-*.md` — рішення про доступ до даних мереж (внутрішні API, обмеження, що робимо при блокуванні)
 - [ ] break-it 1–8 виконані, висновки — у `docs/notes/sprint-00.md`
 
@@ -246,6 +246,7 @@ Workflow на `pull_request` і `push` у `main`:
 | Чому міграції — окремий крок, а не при старті застосунку? | `migrate` у Compose | гонка реплік, one-shot, Job / Helm hook |
 | Чому один образ для трьох процесів? | api / worker / bot | одна збірка, один скан, однакова версія |
 | Що таке build once, deploy many? | `promote-staging` | тег `sha-…`, retag, digest, approve |
+| Як зібрати образ для ARM? | push для Pi 5 | buildx, QEMU, `--platform`, manifest list |
 | Чому бот не можна масштабувати горизонтально? | Break-it #1 | long polling, `409 Conflict`, webhook |
 | Що таке кардинальність метрик? | middleware API | labels, шаблон маршруту, пам'ять Prometheus |
 | Як не закомітити секрет? | pre-commit | gitleaks, `.env` у `.gitignore`, `.env.example` |
@@ -258,6 +259,7 @@ Workflow на `pull_request` і `push` у `main`:
 
 ## ➡️ Що далі
 
-- **01:** cinomir у AWS через Terraform + перевірка, чи пускають мережі з IP AWS
+- **I1 (Ansible):** роль `cinomir` розгортає цей образ на Raspberry Pi 5 — перший постійний «прод»
+- **01:** Terraform на AWS + перевірка, чи пускають мережі з IP датацентру
 - **02:** ті самі три процеси — три Deployment; бот з `replicas: 1` і `strategy: Recreate`
 - **04:** метрики `cinomir_chain_*` стануть алертами «мережа змінила API / блокує нас»

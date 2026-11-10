@@ -1,0 +1,86 @@
+# {{ ansible_managed }}
+# Відрізняється від docker-compose.yml у репозиторії cinomir: образ із реєстру, без build,
+# ліміти пам'яті під Pi, API — лише на 127.0.0.1.
+name: cinomir
+
+x-app: &app
+  image: {{ cinomir_image }}:{{ cinomir_version }}
+  env_file: {{ cinomir_dir }}/app.env   # абсолютний шлях: validate перевіряє копію з /tmp
+  restart: unless-stopped
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    env_file: {{ cinomir_dir }}/db.env
+    environment:
+      POSTGRES_USER: cinomir
+      POSTGRES_DB: cinomir
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cinomir -d cinomir"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    mem_limit: {{ cinomir_limits.postgres }}
+    restart: unless-stopped
+
+  redis:
+    image: redis:8-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    mem_limit: {{ cinomir_limits.redis }}
+    restart: unless-stopped
+
+  migrate:
+    <<: *app
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    <<: *app
+    ports:
+      - "127.0.0.1:8000:8000"
+    mem_limit: {{ cinomir_limits.api }}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  worker:
+    <<: *app
+    command: ["python", "-m", "cinomir.worker"]
+    healthcheck:
+      disable: true
+    mem_limit: {{ cinomir_limits.worker }}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+{% if cinomir_with_bot %}
+
+  bot:
+    <<: *app
+    command: ["python", "-m", "cinomir.bot"]
+    env_file:
+      - {{ cinomir_dir }}/app.env
+      - {{ cinomir_dir }}/bot.env
+    healthcheck:
+      disable: true
+    mem_limit: {{ cinomir_limits.bot }}
+    depends_on:
+      api:
+        condition: service_healthy
+{% endif %}
+
+volumes:
+  pgdata:

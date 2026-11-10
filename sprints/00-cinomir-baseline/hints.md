@@ -179,3 +179,8 @@ Outer middleware на `dp.message` і `dp.callback_query`. Користувач 
 
 Settings → Environments → `staging` → Required reviewers. У job — `environment: staging`. Retag без перезбирання: `docker buildx imagetools create -t …:staging …:sha-xxxxxxx`. Ім'я образу в GHCR — лише малими літерами.
 </details>
+
+<details><summary>5. Образ для Raspberry Pi (arm64)</summary>
+
+`docker/setup-qemu-action` + `platforms: linux/amd64,linux/arm64` у `build-push-action` з `push: true`. `load: true` з кількома платформами не працює (класичне сховище Docker тримає одну архітектуру на тег) — тому перевірки й Trivy робимо на amd64, а мультиархітектурну збірку — окремим кроком із тим самим кешем. Базові образи `python:3.13-slim`, `postgres`, `redis` і колеса `psycopg[binary]` уже мають arm64.
+</details>

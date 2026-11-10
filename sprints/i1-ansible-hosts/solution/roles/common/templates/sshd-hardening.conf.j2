@@ -1,0 +1,11 @@
+# {{ ansible_managed }}
+# Файл 10-* читається раніше за 50-cloud-init.conf: у sshd перемагає ПЕРШЕ значення
+PasswordAuthentication {{ 'yes' if common_ssh_password_authentication else 'no' }}
+KbdInteractiveAuthentication no
+PermitRootLogin {{ common_ssh_permit_root_login }}
+PubkeyAuthentication yes
+MaxAuthTries {{ common_ssh_max_auth_tries }}
+X11Forwarding no
+AllowAgentForwarding no
+ClientAliveInterval 300
+ClientAliveCountMax 2

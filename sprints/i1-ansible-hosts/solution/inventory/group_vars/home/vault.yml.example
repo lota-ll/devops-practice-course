@@ -1,0 +1,10 @@
+# Скопіюй у vault.yml, заповни і зашифруй:
+#   ansible-vault encrypt inventory/group_vars/home/vault.yml
+# Змінні з префіксом vault_ використовуються лише через звичайні змінні ролі —
+# так видно, звідки береться секрет, навіть не розшифровуючи файл.
+vault_cinomir_telegram_bot_token: "123456789:replace-me"
+# Генеруй так: openssl rand -hex 24  (лише hex: ні "$", ні "/" не зламають URL і env-файли)
+vault_cinomir_postgres_password: "replace-me-with-long-random"
+vault_cinomir_allowed_user_ids: "111111111"
+# Потрібен, лише якщо пакет у GHCR приватний (PAT з правом read:packages)
+vault_ghcr_token: ""

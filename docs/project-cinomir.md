@@ -43,7 +43,9 @@ flowchart LR
 | `bot` | тонкий клієнт до API: форматування, кнопки, allowlist | **лише 1 екземпляр** (long polling: другий отримає `409 Conflict`) |
 | `migrate` | `alembic upgrade head` і вихід | one-shot перед стартом api/worker |
 
-Один Docker-образ, три команди запуску.
+Один Docker-образ (amd64 + arm64), три команди запуску.
+
+**Де працює:** розробка — Docker Compose у WSL; постійно — Raspberry Pi 5 (розгортання роллю Ansible з модуля [I1](../sprints/i1-ansible-hosts/README.md)); хмара — рішення відкладено (див. [roadmap](roadmap.md#середовища)).
 
 ## Потік пошуку
 

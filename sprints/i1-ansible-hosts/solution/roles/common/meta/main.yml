@@ -1,0 +1,11 @@
+galaxy_info:
+  author: lota
+  description: Базове налаштування хоста — пакети, SSH hardening, оновлення, firewall
+  license: MIT
+  min_ansible_version: "2.18"
+  platforms:
+    - name: Ubuntu
+      versions: [noble]
+    - name: Debian
+      versions: [bookworm, trixie]
+dependencies: []

@@ -1,0 +1,11 @@
+galaxy_info:
+  author: lota
+  description: Docker Engine + Compose plugin з офіційного репозиторію (amd64 і arm64)
+  license: MIT
+  min_ansible_version: "2.18"
+  platforms:
+    - name: Ubuntu
+      versions: [noble]
+    - name: Debian
+      versions: [bookworm, trixie]
+dependencies: []

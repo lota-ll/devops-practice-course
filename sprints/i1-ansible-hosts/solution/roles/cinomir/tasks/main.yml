@@ -1,0 +1,73 @@
+- name: Версія — незмінний тег образу
+  ansible.builtin.assert:
+    that: cinomir_version is match('^sha-[0-9a-f]{7,40}$')
+    fail_msg: "Задай cinomir_version=sha-xxxxxxx (тег з CI), а не '{{ cinomir_version }}'"
+    quiet: true
+
+- name: Секрети задані (vault розшифровано)
+  ansible.builtin.assert:
+    that:
+      - cinomir_postgres_password | length >= 16
+      - not cinomir_with_bot or cinomir_telegram_bot_token | length > 20
+    fail_msg: "Перевір inventory/group_vars/home/vault.yml і --ask-vault-pass"
+    quiet: true
+  no_log: true
+
+- name: Каталог застосунку
+  ansible.builtin.file:
+    path: "{{ cinomir_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+
+# Кожен контейнер бачить лише свої секрети: токен бота не потрапляє в postgres і api
+- name: Файли оточення (лише root може читати)
+  ansible.builtin.template:
+    src: "{{ item }}.env.j2"
+    dest: "{{ cinomir_dir }}/{{ item }}.env"
+    owner: root
+    group: root
+    mode: "0600"
+  loop: [app, db, bot]
+  no_log: true
+  register: cinomir_env
+
+- name: Файл compose.yaml (перевіряється docker compose config)
+  ansible.builtin.template:
+    src: compose.yaml.j2
+    dest: "{{ cinomir_dir }}/compose.yaml"
+    owner: root
+    group: root
+    mode: "0640"
+    validate: docker compose -f %s config --quiet
+  register: cinomir_compose
+
+- name: Логін у GHCR (лише якщо пакет приватний)
+  community.docker.docker_login:
+    registry_url: ghcr.io
+    username: "{{ cinomir_registry_user }}"
+    password: "{{ cinomir_registry_token }}"
+  when: cinomir_registry_token | length > 0
+  no_log: true
+
+# Новий тег образу -> compose сам перестворить контейнери (recreate: auto).
+# Змінились лише .env -> compose цього не бачить, тому recreate: always.
+- name: Підняти стек
+  community.docker.docker_compose_v2:
+    project_src: "{{ cinomir_dir }}"
+    project_name: cinomir
+    state: present
+    pull: missing
+    recreate: "{{ 'always' if cinomir_env is changed or cinomir_compose is changed else 'auto' }}"
+    wait: true
+    wait_timeout: 180
+
+- name: API готовий
+  ansible.builtin.uri:
+    url: http://127.0.0.1:8000/readyz
+  register: cinomir_ready
+  until: cinomir_ready.status == 200
+  retries: 15
+  delay: 4
+  changed_when: false

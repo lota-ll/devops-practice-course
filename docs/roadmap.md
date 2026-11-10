@@ -6,10 +6,33 @@
 ## Принципи
 
 1. **Спринт = виробничий сценарій**, а не «тема тижня». Є бізнес-задача, критерії приймання (Definition of Done) і обмеження (вартість, безпека).
-2. **Теорія — лише мінімум для рішень** (≤ 30% модуля). Основи Linux, Docker, CI/CD, Nginx, Ansible, AWS core вважаються пройденими.
+2. **Теорія — лише мінімум для рішень** (≤ 30% модуля). Основи Linux, Docker, CI/CD, Nginx, AWS core вважаються пройденими.
 3. **Цикл кожного спринту:** побудувати → зламати навмисно (*break-it drills*) → полагодити → задокументувати (ADR / runbook / postmortem) → сформулювати історію для співбесіди.
 4. **Три шари матеріалу:** `README.md` (завдання) → `hints.md` (підказки, без готового коду) → `solution/` (повний робочий еталон). Еталон відкривати **після** власної спроби.
 5. **Порядок спринтів = вага навички на ринку.** Спочатку те, без чого не пройти скринінг.
+6. **Не все прив'язуємо до cinomir.** Навичкам рівня застосунку (CI/CD, Kubernetes, GitOps, observability застосунку) потрібен живий сервіс — це cinomir. Навичкам рівня хоста (Ansible, hardening, мережі, віртуалізація) — справжнє залізо, а не штучна прив'язка до застосунку.
+
+## Два треки
+
+| Трек | Модулі | На чому |
+|---|---|---|
+| **Застосунок** | 00–10 | cinomir |
+| **Інфраструктура** | I1, … | Raspberry Pi 5 і робочий сервер; cinomir — максимум як вантаж |
+
+Модулі треку «Інфраструктура» не залежать від хмари і вставляються між спринтами, коли зручно. I1 найкраще робити одразу після Спринту 00: роль `cinomir` з I1 — перший постійний деплой бота.
+
+## Середовища
+
+| Етап | Де працює cinomir | Коли |
+|---|---|---|
+| Розробка | Docker Compose у WSL (Ubuntu) | Спринт 00 |
+| Постійний «прод» | **Raspberry Pi 5 (8 ГБ, arm64)**: Compose через Ansible (I1), пізніше k3s | після 00 / I1 |
+| Хмара | рішення відкладено (AWS / Oracle Always Free / інше) — після перевірки, чи пускають мережі з IP датацентру | спринти 01, 06 |
+
+- Домашній IP уже перевірено spike: Сільпо, Фора, Novus відповідають. З IP датацентрів — **ні**, це ризик для будь-якого хмарного варіанту.
+- Бот на long polling не потребує вхідних з'єднань → Pi працює без білого IP. Для webhook (Спринт 03) — Cloudflare Tunnel або аналог.
+- Образ cinomir збирається для **amd64 і arm64** (CI Спринту 00).
+- **Робочий сервер** — лише для треку «Інфраструктура» (доступ через VPN); cinomir туди не розгортаємо.
 
 ## Огляд
 
@@ -26,6 +49,7 @@
 | 08 | DevSecOps на рівні платформи | Supply chain, політики допуску, захист бота і egress | диференціація | — |
 | 09 | Reliability / game days | Chaos, backup/restore, postmortem, Python-автоматизація | 9–10 / 25 | 💲 |
 | 10 | Job readiness | Портфоліо, CV під 3 профілі, mock-інтерв'ю | — | — |
+| **I1** | [Ansible: конфігурація власних хостів](../sprints/i1-ansible-hosts/README.md) | Ролі common / docker / node_exporter / cinomir на Pi 5 + сервері, vault, lint, ідемпотентність | 10 / 25 | — |
 
 **Опційні треки** (вмикаються під конкретну вакансію): Azure (AKS, Entra ID, Azure DevOps) · Windows (PowerShell, AD/GPO) · GCP (GKE, Cloud Build).
 
@@ -65,7 +89,7 @@
 
 **Сценарій:** переходимо з Compose на Kubernetes. Перенести cinomir і навчитися діагностувати типові аварії.
 
-**Будуємо (kind / k3d локально):** Namespace, Deployment api (HPA) і worker, Deployment bot з `replicas: 1` і `strategy: Recreate` (обговорення: чому RollingUpdate для long polling дає `409 Conflict`), StatefulSet PostgreSQL + PVC, Redis, ConfigMap / Secret (токен бота), міграція як Job, liveness/readiness/startup probes, requests/limits, PodDisruptionBudget, graceful shutdown (`terminationGracePeriodSeconds`).
+**Будуємо (kind у WSL або k3s на Pi 5):** Namespace, Deployment api (HPA) і worker, Deployment bot з `replicas: 1` і `strategy: Recreate` (обговорення: чому RollingUpdate для long polling дає `409 Conflict`), StatefulSet PostgreSQL + PVC, Redis, ConfigMap / Secret (токен бота), міграція як Job, liveness/readiness/startup probes, requests/limits, PodDisruptionBudget, graceful shutdown (`terminationGracePeriodSeconds`).
 
 **Лабораторія поломок:** `CrashLoopBackOff` (немає токена бота) · `ImagePullBackOff` · `OOMKilled` · `Pending` (ресурси / PVC) · `readiness` не проходить → трафіку немає · DNS між сервісами (бот не бачить api) · міграція не пройшла · два поди бота → `409 Conflict`.
 
@@ -119,7 +143,7 @@
 
 **Сценарій:** клієнт без хмари — власні сервери, Jenkins, віртуалізація.
 
-**Будуємо:** Jenkins у контейнері, declarative `Jenkinsfile` для cinomir, shared library, **Job DSL** seed job (явна вимога в on-prem вакансіях). Proxmox VE (або KVM/libvirt) у nested-віртуалізації чи на вільному залізі: VM через Terraform-провайдер + Ansible-провізіонінг, firewall-політики (nftables), WireGuard VPN для доступу, бекапи VM, моніторинг хоста.
+**Будуємо:** Jenkins у контейнері, declarative `Jenkinsfile` для cinomir, shared library, **Job DSL** seed job (явна вимога в on-prem вакансіях). Proxmox VE (або KVM/libvirt) у nested-віртуалізації чи на вільному залізі: VM через Terraform-провайдер + ролі з I1 (Ansible), firewall-політики (nftables), WireGuard VPN для доступу, бекапи VM, моніторинг хоста.
 
 **DoD:** pipeline у Jenkins еквівалентний GitHub Actions · нова VM з cinomir піднімається з коду · доступ до VM лише через VPN.
 
@@ -172,7 +196,7 @@
 
 ## Як працювати з модулем
 
-1. Прочитай `README.md` спринту, виконай задачі **у власному репозиторії cinomir**.
+1. Прочитай `README.md` спринту, виконай задачі **у власному репозиторії** (`cinomir` для треку «Застосунок», `homelab-ansible` для I1).
 2. Застряг більш ніж на 30–40 хв — відкрий `hints.md` (підказки йдуть від загальної до конкретної).
 3. Після завершення порівняй своє рішення з `solution/`, зафіксуй відмінності в нотатках.
 4. Познач спринт виконаним у [README](../README.md#прогрес).

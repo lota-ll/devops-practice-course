@@ -1,0 +1,12 @@
+# Порівняти хости: ОС, архітектура, ресурси — до того, як писати ролі
+- name: Що за хости
+  hosts: all
+  gather_facts: true
+  tasks:
+    - name: Коротко про хост
+      ansible.builtin.debug:
+        msg: >-
+          {{ inventory_hostname }}: {{ ansible_facts.distribution }} {{ ansible_facts.distribution_version }}
+          ({{ ansible_facts.distribution_release }}), {{ ansible_facts.architecture }},
+          {{ ansible_facts.processor_vcpus }} vCPU, {{ ansible_facts.memtotal_mb }} MB RAM,
+          python {{ ansible_facts.python_version }}

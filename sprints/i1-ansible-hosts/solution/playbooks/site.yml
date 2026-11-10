@@ -1,0 +1,11 @@
+# Базова конфігурація всіх хостів. Безпечно запускати повторно.
+- name: Базове налаштування хостів
+  hosts: all
+  become: true
+  roles:
+    - role: common
+      tags: [common]
+    - role: docker
+      tags: [docker]
+    - role: node_exporter
+      tags: [node_exporter]

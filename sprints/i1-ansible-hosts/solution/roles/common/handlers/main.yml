@@ -1,0 +1,10 @@
+# Сервіс у Debian/Ubuntu/Raspberry Pi OS називається ssh (не sshd)
+- name: Reload ssh
+  ansible.builtin.systemd_service:
+    name: ssh
+    state: reloaded
+
+- name: Reload nftables
+  ansible.builtin.systemd_service:
+    name: nftables
+    state: reloaded

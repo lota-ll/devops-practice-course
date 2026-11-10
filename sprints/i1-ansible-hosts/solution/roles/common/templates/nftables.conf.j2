@@ -1,0 +1,36 @@
+#!/usr/sbin/nft -f
+# {{ ansible_managed }}
+#
+# НЕ `flush ruleset`: це знесе таблиці Docker (iptables-nft) і зламає мережу контейнерів.
+# Керуємо лише своєю таблицею: оголосити (якщо нема) -> видалити -> створити заново.
+# Увага: порти, опубліковані Docker (`ports:`), йдуть через DNAT/forward і цей
+# ланцюжок input НЕ проходять. Тому в compose публікуємо лише на 127.0.0.1.
+
+table inet host_filter {}
+delete table inet host_filter
+
+table inet host_filter {
+    chain input {
+        type filter hook input priority filter; policy drop;
+
+        ct state established,related accept
+        ct state invalid drop
+        iif "lo" accept
+        meta l4proto { icmp, ipv6-icmp } accept
+
+{% for rule in common_firewall_tcp_rules %}
+{%   if rule.from | default([]) | length > 0 %}
+{%     set v4 = rule.from | select('search', '\.') | list %}
+{%     set v6 = rule.from | select('search', ':') | list %}
+{%     if v4 %}
+        ip saddr { {{ v4 | join(', ') }} } tcp dport {{ rule.port }} accept comment "{{ rule.comment | default('') }}"
+{%     endif %}
+{%     if v6 %}
+        ip6 saddr { {{ v6 | join(', ') }} } tcp dport {{ rule.port }} accept comment "{{ rule.comment | default('') }}"
+{%     endif %}
+{%   else %}
+        tcp dport {{ rule.port }} accept comment "{{ rule.comment | default('') }}"
+{%   endif %}
+{% endfor %}
+    }
+}

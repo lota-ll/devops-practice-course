@@ -1,0 +1,22 @@
+cinomir_dir: /opt/cinomir
+# ghcr.io/<твій-github>/cinomir — лише малими літерами
+cinomir_image: ghcr.io/CHANGE-ME/cinomir
+# Лише незмінний тег sha-xxxxxxx (з CI Спринту 00). `staging`/`latest` змінюються
+# без зміни в Git — тоді не зрозуміло, що саме зараз працює, і pull: missing їх не оновить.
+cinomir_version: ""
+cinomir_with_bot: true
+cinomir_log_level: INFO
+
+cinomir_telegram_bot_token: "{{ vault_cinomir_telegram_bot_token }}"
+cinomir_postgres_password: "{{ vault_cinomir_postgres_password }}"
+cinomir_allowed_user_ids: "{{ vault_cinomir_allowed_user_ids }}"
+cinomir_registry_user: "{{ ansible_user }}"
+cinomir_registry_token: "{{ vault_ghcr_token | default('') }}"
+
+# Pi 5 8 ГБ: ліміти, щоб один сервіс не з'їв усю пам'ять
+cinomir_limits:
+  postgres: 512m
+  redis: 128m
+  api: 384m
+  worker: 256m
+  bot: 192m

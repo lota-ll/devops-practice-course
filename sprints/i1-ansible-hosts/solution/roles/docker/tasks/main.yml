@@ -1,0 +1,55 @@
+- name: Архітектура підтримується
+  ansible.builtin.assert:
+    that: ansible_facts.architecture in docker_arch_map
+    fail_msg: "Невідома архітектура {{ ansible_facts.architecture }}"
+    quiet: true
+
+- name: Прибрати пакети, що конфліктують з docker-ce
+  ansible.builtin.apt:
+    name: "{{ docker_conflicting_packages }}"
+    state: absent
+
+- name: Залежність модуля deb822_repository на керованому хості
+  ansible.builtin.apt:
+    name: python3-debian
+    state: present
+
+- name: Репозиторій Docker (deb822, ключ прив'язаний лише до цього репозиторію)
+  ansible.builtin.deb822_repository:
+    name: docker
+    types: [deb]
+    uris: "https://download.docker.com/linux/{{ ansible_facts.distribution | lower }}"
+    suites: ["{{ ansible_facts.distribution_release }}"]
+    components: [stable]
+    architectures: ["{{ docker_arch_map[ansible_facts.architecture] }}"]
+    signed_by: "https://download.docker.com/linux/{{ ansible_facts.distribution | lower }}/gpg"
+    state: present
+  register: docker_repo
+
+- name: Встановити Docker
+  ansible.builtin.apt:
+    name: "{{ docker_packages }}"
+    state: present
+    update_cache: "{{ docker_repo is changed }}"
+
+- name: Налаштування демона (ротація логів — інакше диск Pi заповниться)
+  ansible.builtin.template:
+    src: daemon.json.j2
+    dest: /etc/docker/daemon.json
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart docker
+
+- name: Docker увімкнено і запущено
+  ansible.builtin.systemd_service:
+    name: docker
+    enabled: true
+    state: started
+
+- name: Користувачі в групі docker
+  ansible.builtin.user:
+    name: "{{ item }}"
+    groups: docker
+    append: true
+  loop: "{{ docker_users }}"

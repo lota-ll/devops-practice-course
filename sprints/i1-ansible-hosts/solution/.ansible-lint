@@ -1,0 +1,6 @@
+# Найсуворіший профіль: так пишуть ролі, які не соромно показати
+profile: production
+exclude_paths:
+  - .venv/
+  - .github/
+  - inventory/group_vars/home/vault.yml
