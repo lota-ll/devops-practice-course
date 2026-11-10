@@ -1,0 +1,130 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  IMAGE: ghcr.io/${{ github.repository }}
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: pip install -e ".[dev]"
+      - run: ruff check .
+      - run: ruff format --check .
+
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: pip install -e ".[dev]"
+      - run: pytest --junitxml=report.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pytest-report
+          path: report.xml
+
+  migrations:
+    # Тести йдуть на SQLite — а прод на PostgreSQL. Міграції перевіряємо на справжньому.
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: cinomir
+          POSTGRES_PASSWORD: cinomir
+          POSTGRES_DB: cinomir
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U cinomir" --health-interval 5s
+          --health-timeout 3s --health-retries 10
+    env:
+      DATABASE_URL: postgresql+psycopg://cinomir:cinomir@localhost:5432/cinomir
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: pip install -e .
+      - name: upgrade → check → downgrade → upgrade
+        run: |
+          alembic upgrade head
+          alembic check
+          alembic downgrade base
+          alembic upgrade head
+
+  build:
+    needs: [lint, test, migrations]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/setup-buildx-action@v3
+      - name: Build (локально в раннері)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: cinomir:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Smoke test образу
+        run: |
+          docker run --rm cinomir:ci python -c "import cinomir.api, cinomir.worker, cinomir.bot"
+          docker run --rm cinomir:ci id -u | grep -qx 10001
+      # Березень 2026: теги trivy-action 0.0.1–0.34.2 були підмінені (GHSA-69fq-xp46-6x23).
+      # Безпечні: action 0.35.0 (immutable release) + trivy v0.69.3. У Спринті 08 — пін за SHA.
+      - name: Trivy (CRITICAL/HIGH з виправленням = падіння)
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          version: v0.69.3
+          image-ref: cinomir:ci
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
+      - name: Push у GHCR (лише main)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          image="$(echo "$IMAGE" | tr '[:upper:]' '[:lower:]')"
+          docker tag cinomir:ci "$image:sha-${GITHUB_SHA::7}"
+          docker push "$image:sha-${GITHUB_SHA::7}"
+          echo "### Образ: \`$image:sha-${GITHUB_SHA::7}\`" >> "$GITHUB_STEP_SUMMARY"
+
+  promote-staging:
+    # Промоція = новий тег того самого образу, без перезбирання (build once, deploy many)
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    environment: staging
+    permissions:
+      packages: write
+    steps:
+      - name: Retag sha → staging
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          image="$(echo "$IMAGE" | tr '[:upper:]' '[:lower:]')"
+          docker buildx imagetools create -t "$image:staging" "$image:sha-${GITHUB_SHA::7}"

@@ -1,0 +1,87 @@
+# Локальне середовище: `make up` (без бота) або `make up-bot` (з ботом).
+name: cinomir
+
+x-app: &app
+  build: .
+  image: cinomir:local
+  env_file:
+    - path: .env
+      required: false
+  environment: &app-env
+    DATABASE_URL: postgresql+psycopg://cinomir:${POSTGRES_PASSWORD:-cinomir}@postgres:5432/cinomir
+    REDIS_URL: redis://redis:6379/0
+  restart: unless-stopped
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: cinomir
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cinomir}
+      POSTGRES_DB: cinomir
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"   # лише localhost: БД не має бути видно з мережі
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cinomir -d cinomir"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:8-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]  # лише кеш і черга
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  migrate:
+    <<: *app
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    <<: *app
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  worker:
+    <<: *app
+    command: ["python", "-m", "cinomir.worker"]
+    healthcheck:
+      disable: true
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  bot:
+    <<: *app
+    profiles: ["bot"]
+    command: ["python", "-m", "cinomir.bot"]
+    environment:
+      <<: *app-env
+      API_URL: http://api:8000
+    healthcheck:
+      disable: true
+    # Long polling: ЗАВЖДИ один екземпляр (другий отримає 409 Conflict від Telegram)
+    deploy:
+      replicas: 1
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  pgdata:

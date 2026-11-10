@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cinomir"
+version = "0.1.0"
+description = "Ціномір — порівняння цін у супермаркетах Києва через Telegram-бота"
+requires-python = ">=3.12"
+# Єдине джерело правди для залежностей. Точні версії = відтворювані збірки.
+dependencies = [
+    "fastapi==0.162.0",
+    "uvicorn[standard]==0.54.0",
+    "sqlalchemy[asyncio]==2.1.8",
+    "psycopg[binary]==3.3.8",
+    "alembic==1.20.1",
+    "redis==8.1.0",
+    "httpx==0.28.1",
+    "prometheus-client==0.26.0",
+    "pydantic==2.13.5",
+    "aiogram==3.31.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==9.1.1",
+    "ruff==0.17.3",
+    "fakeredis==2.40.0",
+    "aiosqlite==0.22.1",
+    "pre-commit==4.7.0",
+]
+
+[project.scripts]
+cinomir-search = "cinomir.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-q -p anyio"
